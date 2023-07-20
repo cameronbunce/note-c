@@ -11,12 +11,13 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
 
 #include "n_lib.h"
+#include "time_mocks.h"
 
 DEFINE_FFF_GLOBALS
 FAKE_VALUE_FUNC(J *, NoteNewRequest, const char *)
@@ -25,16 +26,6 @@ FAKE_VALUE_FUNC(long unsigned int, NoteGetMs)
 
 namespace
 {
-
-long unsigned int NoteGetMsIncrement(void)
-{
-    static long unsigned int count = 0;
-
-    // increment by 1 second
-    count += 1000;
-    // return count pre-increment
-    return count - 1000;
-}
 
 TEST_CASE("NoteTime")
 {
@@ -51,7 +42,6 @@ TEST_CASE("NoteTime")
         // Unable to get time from Notecard, so we should get back the
         // seconds since boot.
         CHECK(NoteTime() == 1);
-
     }
 
     SECTION("card.time errors") {
@@ -92,8 +82,24 @@ TEST_CASE("NoteTime")
         // fetch the time.
         CHECK((time > 0 && time < 1599769214));
     }
+
+    SECTION("Millisecond rollover") {
+        JTIME baseTime = 1679335667;
+        long unsigned int baseTimeSetAtMs = 1000;
+        long unsigned int rolloverMs = 500;
+        long unsigned int getMsRetVals[] = {baseTimeSetAtMs, rolloverMs};
+        SET_RETURN_SEQ(NoteGetMs, getMsRetVals, 2);
+
+        // Set the time manually so that the base time is non-zero.
+        NoteTimeSet(baseTime, 0, NULL, NULL, NULL);
+        // Compute the new base time, taking into account the millisecond
+        // rollover.
+        JTIME newBaseTime = baseTime + (0x100000000LL + rolloverMs -
+                                        baseTimeSetAtMs) / 1000;
+        CHECK(NoteTime() == newBaseTime);
+    }
 }
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST

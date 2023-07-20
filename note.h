@@ -39,6 +39,7 @@
 
 // In case they're not yet defined
 #include <float.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -121,7 +122,7 @@ void NoteResumeTransactionDebug(void);
 #define SYNCSTATUS_LEVEL_ALL          -1
 bool NoteDebugSyncStatus(int pollFrequencyMs, int maxLevel);
 bool NoteRequest(J *req);
-bool NoteRequestWithRetry(J *req, uint32_t timeoutms);
+bool NoteRequestWithRetry(J *req, uint32_t timeoutSeconds);
 #define NoteResponseError(rsp) (!JIsNullString(rsp, "err"))
 #define NoteResponseErrorContains(rsp, errstr) (JContainsString(rsp, "err", errstr))
 #define NoteDeleteResponse(rsp) JDelete(rsp)
@@ -131,20 +132,46 @@ void NoteErrorClean(char *errbuf);
 void NoteSetFnDebugOutput(debugOutputFn fn);
 void NoteSetFnTransaction(txnStartFn startFn, txnStopFn stopFn);
 void NoteSetFnMutex(mutexFn lockI2Cfn, mutexFn unlockI2Cfn, mutexFn lockNotefn, mutexFn unlockNotefn);
+void NoteSetFnI2CMutex(mutexFn lockI2Cfn, mutexFn unlockI2Cfn);
+void NoteSetFnNoteMutex(mutexFn lockNotefn, mutexFn unlockNotefn);
 void NoteSetFnDefault(mallocFn mallocfn, freeFn freefn, delayMsFn delayfn, getMsFn millisfn);
 void NoteSetFn(mallocFn mallocfn, freeFn freefn, delayMsFn delayfn, getMsFn millisfn);
 void NoteSetFnSerial(serialResetFn resetfn, serialTransmitFn writefn, serialAvailableFn availfn, serialReceiveFn readfn);
-
-#define NOTE_I2C_ADDR_DEFAULT	0x17
-#ifndef NOTE_I2C_MAX_DEFAULT
-#define NOTE_I2C_MAX_DEFAULT	30
-#endif
-#ifndef NOTE_I2C_MAX_MAX
-#define NOTE_I2C_MAX_MAX		127
-#endif
 void NoteSetFnI2C(uint32_t i2caddr, uint32_t i2cmax, i2cResetFn resetfn, i2cTransmitFn transmitfn, i2cReceiveFn receivefn);
 void NoteSetFnDisabled(void);
 void NoteSetI2CAddress(uint32_t i2caddress);
+
+// The Notecard, whose default I2C address is below, uses a serial-to-i2c
+// protocol whose "byte count" must fit into a single byte and which must not
+// include a 2-byte header field.  This is why the maximum that can be
+// transmitted by note-c in a single I2C I/O is 255 - 2 = 253 bytes.
+#define NOTE_I2C_ADDR_DEFAULT	0x17
+
+// Serial-to-i2c protocol header size in bytes
+#ifndef NOTE_I2C_HEADER_SIZE
+#define NOTE_I2C_HEADER_SIZE 2
+#endif
+
+// Maximum bytes capable of being transmitted in a single read/write operation
+#ifndef NOTE_I2C_MAX_MAX
+#define NOTE_I2C_MAX_MAX (UCHAR_MAX - NOTE_I2C_HEADER_SIZE)
+#endif
+
+// In ARDUINO implementations, which to date is the largest use of this library,
+// the Wire package is implemented in a broad variety of ways by different
+// vendors.  The default implementation has a mere 32-byte static I2C buffer,
+// which means that the maximum to be transmitted in a single I/O (given our
+// 2-byte serial-to-i2c protocol header) is 30 bytes.  However, if we know
+// the specific platform (such as STM32DUINO) we can relax this restriction.
+#if defined(NOTE_I2C_MAX_DEFAULT)
+// user is overriding it at compile time
+#elif defined(ARDUINO_ARCH_STM32)
+// we know that stm32duino dynamically allocates I/O buffer
+#define NOTE_I2C_MAX_DEFAULT NOTE_I2C_MAX_MAX
+#else
+// default to what's known to be safe for all Arduino implementations
+#define NOTE_I2C_MAX_DEFAULT	30
+#endif
 
 // User agent
 J *NoteUserAgent(void);
@@ -158,6 +185,47 @@ void NoteDebug(const char *message);
 void NoteDebugln(const char *message);
 void NoteDebugIntln(const char *message, int n);
 void NoteDebugf(const char *format, ...);
+
+#define NOTE_C_LOG_LEVEL_ERROR  0
+#define NOTE_C_LOG_LEVEL_WARN   1
+#define NOTE_C_LOG_LEVEL_INFO   2
+#define NOTE_C_LOG_LEVEL_DEBUG  3
+
+void NoteDebugWithLevel(uint8_t level, const char *msg);
+
+#define _NOTE_C_STRINGIZE(x) #x
+#define NOTE_C_STRINGIZE(x) _NOTE_C_STRINGIZE(x)
+
+#define NOTE_C_LOG_ERROR(msg) do { \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_ERROR, __FILE__ ":" \
+  NOTE_C_STRINGIZE(__LINE__) " (ERROR) "); \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_ERROR, msg); \
+} while (0);
+
+#define NOTE_C_LOG_WARN(msg) do { \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_WARN, __FILE__ ":" \
+  NOTE_C_STRINGIZE(__LINE__) " (WARN) "); \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_WARN, msg); \
+} while (0);
+
+#define NOTE_C_LOG_INFO(msg) do { \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_INFO, __FILE__ ":" \
+  NOTE_C_STRINGIZE(__LINE__) " (INFO) "); \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_INFO, msg); \
+} while (0);
+
+#define NOTE_C_LOG_DEBUG(msg) do { \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_DEBUG, __FILE__ ":" \
+  NOTE_C_STRINGIZE(__LINE__) " (DEBUG) "); \
+  NoteDebugWithLevel(NOTE_C_LOG_LEVEL_DEBUG, msg); \
+} while (0);
+
+// The max log level for NoteDebugWithLevel is only configurable at
+// compile-time, via NOTE_C_LOG_LEVEL_MAX.
+#ifndef NOTE_C_LOG_LEVEL_MAX
+#define NOTE_C_LOG_LEVEL_MAX NOTE_C_LOG_LEVEL_ERROR
+#endif
+
 void *NoteMalloc(size_t size);
 void NoteFree(void *);
 long unsigned int NoteGetMs(void);
@@ -181,6 +249,7 @@ void JCheck(void);
 bool JIsPresent(J *rsp, const char *field);
 char *JGetString(J *rsp, const char *field);
 JNUMBER JGetNumber(J *rsp, const char *field);
+J *JGetArray(J *rsp, const char *field);
 J *JGetObject(J *rsp, const char *field);
 long int JGetInt(J *rsp, const char *field);
 bool JGetBool(J *rsp, const char *field);
@@ -200,6 +269,7 @@ const char *JType(J *item);
 #define JTYPE_NOT_PRESENT		0
 #define JTYPE_BOOL_TRUE			1
 #define JTYPE_BOOL_FALSE		2
+#define JTYPE_BOOL              JTYPE_BOOL_TRUE
 #define JTYPE_NULL				3
 #define JTYPE_NUMBER_ZERO		4
 #define JTYPE_NUMBER			5
@@ -212,6 +282,9 @@ const char *JType(J *item);
 #define JTYPE_OBJECT			12
 #define JTYPE_ARRAY				13
 int JGetType(J *rsp, const char *field);
+int JGetItemType(J *item);
+int JBaseItemType(int type);
+#define JGetObjectItemName(j) (j->string)
 
 // Helper functions for apps that wish to limit their C library dependencies
 #define JNTOA_PRECISION (16)
@@ -305,25 +378,22 @@ bool NotePayloadAddSegment(NotePayloadDesc *desc, const char segtype[NP_SEGTYPE_
 bool NotePayloadFindSegment(NotePayloadDesc *desc, const char segtype[NP_SEGTYPE_LEN], void *pdata, uint32_t *plen);
 bool NotePayloadGetSegment(NotePayloadDesc *desc, const char segtype[NP_SEGTYPE_LEN], void *pdata, uint32_t len);
 
-// C macro to convert a number to a string for use below
-#define _tstring(x)     #x
-
 // Hard-wired constants used to specify field types when creating note templates
-#define TBOOL           true                // bool
-#define TINT8           11                  // 1-byte signed integer
-#define TINT16          12                  // 2-byte signed integer
-#define TINT24          13                  // 3-byte signed integer
-#define TINT32          14                  // 4-byte signed integer
-#define TINT64          18                  // 8-byte signed integer (note-c support depends upon platform)
-#define TUINT8          21                  // 1-byte unsigned integer (requires notecard firmware >= build 14444)
-#define TUINT16         22                  // 2-byte unsigned integer (requires notecard firmware >= build 14444)
-#define TUINT24         23                  // 3-byte unsigned integer (requires notecard firmware >= build 14444)
-#define TUINT32         24                  // 4-byte unsigned integer (requires notecard firmware >= build 14444)
-#define TFLOAT16        12.1                // 2-byte IEEE 754 floating point
-#define TFLOAT32        14.1                // 4-byte IEEE 754 floating point (a.k.a. "float")
-#define TFLOAT64        18.1                // 8-byte IEEE 754 floating point (a.k.a. "double")
-#define TSTRING(N)      _tstring(N)         // UTF-8 text of N bytes maximum (fixed-length reserved buffer)
-#define TSTRINGV        _tstring(0)         // variable-length string
+#define TBOOL           true                 // bool
+#define TINT8           11                   // 1-byte signed integer
+#define TINT16          12                   // 2-byte signed integer
+#define TINT24          13                   // 3-byte signed integer
+#define TINT32          14                   // 4-byte signed integer
+#define TINT64          18                   // 8-byte signed integer (note-c support depends upon platform)
+#define TUINT8          21                   // 1-byte unsigned integer (requires notecard firmware >= build 14444)
+#define TUINT16         22                   // 2-byte unsigned integer (requires notecard firmware >= build 14444)
+#define TUINT24         23                   // 3-byte unsigned integer (requires notecard firmware >= build 14444)
+#define TUINT32         24                   // 4-byte unsigned integer (requires notecard firmware >= build 14444)
+#define TFLOAT16        12.1                 // 2-byte IEEE 754 floating point
+#define TFLOAT32        14.1                 // 4-byte IEEE 754 floating point (a.k.a. "float")
+#define TFLOAT64        18.1                 // 8-byte IEEE 754 floating point (a.k.a. "double")
+#define TSTRING(N)      _NOTE_C_STRINGIZE(N) // UTF-8 text of N bytes maximum (fixed-length reserved buffer)
+#define TSTRINGV        _NOTE_C_STRINGIZE(0) // variable-length string
 bool NoteTemplate(const char *notefileID, J *templateBody);
 
 // End of C-callable functions

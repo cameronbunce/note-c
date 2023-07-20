@@ -11,7 +11,7 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
@@ -77,4 +77,4 @@ TEST_CASE("NoteSleep")
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST

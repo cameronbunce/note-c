@@ -11,7 +11,7 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
@@ -36,7 +36,6 @@ bool NotePrintSave(const char* text)
     return true;
 }
 
-
 TEST_CASE("NotePrintln")
 {
     NotePrint_fake.custom_fake = NotePrintSave;
@@ -52,4 +51,4 @@ TEST_CASE("NotePrintln")
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST

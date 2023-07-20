@@ -11,7 +11,7 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
@@ -25,7 +25,7 @@ FAKE_VALUE_FUNC(J *, NoteRequestResponse, J *)
 namespace
 {
 
-TEST_CASE("NoteGetLocationMode_test")
+TEST_CASE("NoteGetLocationMode")
 {
     NoteSetFnDefault(malloc, free, NULL, NULL);
 
@@ -64,4 +64,4 @@ TEST_CASE("NoteGetLocationMode_test")
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST

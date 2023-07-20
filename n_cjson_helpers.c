@@ -60,6 +60,29 @@ char *JGetString(J *rsp, const char *field)
 
 //**************************************************************************/
 /*!
+    @brief  Return an array from the specified JSON object.
+    @param   rsp The JSON response object.
+    @param   field The field to return.
+    @returns The array found, or NULL, if not present.
+*/
+/**************************************************************************/
+J *JGetArray(J *rsp, const char *field)
+{
+    if (rsp == NULL) {
+        return NULL;
+    }
+    J *item = JGetObjectItem(rsp, field);
+    if (item == NULL) {
+        return NULL;
+    }
+    if (!JIsArray(item)) {
+        return NULL;
+    }
+    return item;
+}
+
+//**************************************************************************/
+/*!
     @brief  Return an object from the specified JSON object.
     @param   rsp The JSON response object.
     @param   field The field to return.
@@ -386,7 +409,7 @@ bool JGetBinaryFromObject(J *rsp, const char *fieldName, uint8_t **retBinaryData
 /*!
     @brief  Get the object name.
     @param   item The JSON object.
-    @returns The number, or and empty string, if NULL.
+    @returns The name, or the empty string, if NULL.
 */
 /**************************************************************************/
 const char *JGetItemName(const J * item)
@@ -399,10 +422,10 @@ const char *JGetItemName(const J * item)
 
 //**************************************************************************/
 /*!
-    @brief  Convert an integer to text
-    @param   an integer
-    @returns The number converted to text, null-terminated.
-    @note The buffer midt be large enough because no bounds checking is done.
+    @brief  Convert an integer to text.
+    @param   n The integer to convert.
+    @param   s The buffer to hold the text.
+    @note The buffer must be large enough because no bounds checking is done.
 */
 /**************************************************************************/
 void JItoA(long int n, char *s)
@@ -430,7 +453,7 @@ void JItoA(long int n, char *s)
 //**************************************************************************/
 /*!
     @brief  Convert text to an integer
-    @param   a null-terminated text buffer
+    @param   string A null-terminated text buffer
     @returns An integer, or 0 if invalid
 */
 /**************************************************************************/
@@ -467,15 +490,18 @@ long int JAtoI(const char *string)
 //**************************************************************************/
 /*!
     @brief  Convert a buffer/len to a null-terminated c-string
-    @param   a buffer containing text with a counted length
-    @returns A c-string (NULL if invalid) that must be freed with JFree()
+    @param   buffer A buffer containing the bytes to convert.
+    @param   len The length of buffer in bytes.
+    @returns If buffer is NULL or length 0, the empty string. If allocation
+             fails, NULL. On success, the converted c-string. The returned
+             string must be freed with NoteFree.
 */
 /**************************************************************************/
 char *JAllocString(uint8_t *buffer, uint32_t len)
 {
     char *buf = _Malloc(len+1);
     if (buf == NULL) {
-        return false;
+        return NULL;
     }
     if (len > 0) {
         memcpy(buf, buffer, len);
@@ -517,19 +543,25 @@ const char *JType(J *item)
 
 //**************************************************************************/
 /*!
-    @brief  Return the type of an item, as an int usable in a switch statement
-    @param   json object
-    @param   field within the json object
-    @returns The type
+    @brief  Get the type of a field, as an int usable in a switch statement.
+    @param   rsp The JSON object containing the field.
+    @param   field The field's name.
+    @returns The type of the field on success. JTYPE_NOT_PRESENT on error or if
+             the field doesn't exist.
 */
 /**************************************************************************/
 int JGetType(J *rsp, const char *field)
 {
-    const char *v;
     if (rsp == NULL || field == NULL) {
         return JTYPE_NOT_PRESENT;
     }
-    J *item = JGetObjectItem(rsp, field);
+    return JGetItemType(JGetObjectItem(rsp, field));
+}
+
+// Get the
+int JGetItemType(J *item)
+{
+    const char *v;
     if (item == NULL) {
         return JTYPE_NOT_PRESENT;
     }
@@ -553,7 +585,11 @@ int JGetType(J *rsp, const char *field)
         }
         int vlen = strlen(v);
         char *endstr;
+#if !CJSON_NO_CLIB
+        JNUMBER value = strtod(v, &endstr);
+#else
         JNUMBER value = JAtoN(v, &endstr);
+#endif
         if (endstr[0] == 0) {
             if (value == 0) {
                 return JTYPE_STRING_ZERO;
@@ -583,4 +619,28 @@ int JGetType(J *rsp, const char *field)
         return JTYPE_ARRAY;
     }
     return JTYPE_NOT_PRESENT;
+}
+
+// Coalesce to the base types
+int JBaseItemType(int type)
+{
+    switch (type) {
+    case JTYPE_BOOL_TRUE:
+        return JTYPE_BOOL;
+    case JTYPE_BOOL_FALSE:
+        return JTYPE_BOOL;
+    case JTYPE_NUMBER_ZERO:
+        return JTYPE_NUMBER;
+    case JTYPE_STRING_BLANK:
+        return JTYPE_STRING;
+    case JTYPE_STRING_ZERO:
+        return JTYPE_STRING;
+    case JTYPE_STRING_NUMBER:
+        return JTYPE_STRING;
+    case JTYPE_STRING_BOOL_TRUE:
+        return JTYPE_STRING;
+    case JTYPE_STRING_BOOL_FALSE:
+        return JTYPE_STRING;
+    }
+    return type;
 }

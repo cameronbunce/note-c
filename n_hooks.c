@@ -282,6 +282,33 @@ void NoteSetFnMutex(mutexFn lockI2Cfn, mutexFn unlockI2Cfn, mutexFn lockNotefn, 
 
 //**************************************************************************/
 /*!
+  @brief  Set the platform-specific mutex functions for I2C.
+  @param   lockI2Cfn  The platform-specific I2C lock function to use.
+  @param   unlockI2Cfn  The platform-specific I2C unlock function to use.
+*/
+/**************************************************************************/
+void NoteSetFnI2CMutex(mutexFn lockI2Cfn, mutexFn unlockI2Cfn)
+{
+    hookLockI2C = lockI2Cfn;
+    hookUnlockI2C = unlockI2Cfn;
+}
+
+//**************************************************************************/
+/*!
+  @brief  Set the platform-specific mutex functions for the Notecard.
+  @param   lockNotefn  The platform-specific Notecard lock function to use.
+  @param   unlockNotefn  The platform-specific Notecard unlock function
+  to use.
+*/
+/**************************************************************************/
+void NoteSetFnNoteMutex(mutexFn lockNotefn, mutexFn unlockNotefn)
+{
+    hookLockNote = lockNotefn;
+    hookUnlockNote = unlockNotefn;
+}
+
+//**************************************************************************/
+/*!
   @brief  Set the platform-specific Serial communication functions for the
   Notecard.
   @param   resetfn  The platform-specific Serial reset function to use.
@@ -393,6 +420,29 @@ void NoteDebug(const char *line)
 
 //**************************************************************************/
 /*!
+  @brief       Write the message to the debug stream, if the level is less than
+               or equal to NOTE_C_LOG_LEVEL_MAX. Otherwise, the message is
+               dropped.
+  @param level The log level of the message. See the NOTE_C_LOG_LEVEL_* macros
+               in note.h for possible values.
+  @param msg   The debug message.
+*/
+/**************************************************************************/
+void NoteDebugWithLevel(uint8_t level, const char *msg)
+{
+#ifndef NOTE_NODEBUG
+
+    if (level > NOTE_C_LOG_LEVEL_MAX) {
+        return;
+    }
+
+    NoteDebug(msg);
+
+#endif // !NOTE_NODEBUG
+}
+
+//**************************************************************************/
+/*!
   @brief  Get the current milliseconds value from the platform-specific
   hook.
   @returns  The current milliseconds value.
@@ -419,15 +469,15 @@ void NoteDelayMs(uint32_t ms)
     }
 }
 
-#if NOTE_SHOW_MALLOC
+#if NOTE_SHOW_MALLOC || !defined(NOTE_LOWMEM)
 //**************************************************************************/
 /*!
-  @brief  If set for low-memory platforms, show a malloc call.
-  @param   len the number of bytes of memory allocated by the last call.
+  @brief  Convert number to a hex string
+  @param   the number
+  @param   the buffer to return it into
 */
 /**************************************************************************/
-void htoa32(uint32_t n, char *p);
-void htoa32(uint32_t n, char *p)
+void n_htoa32(uint32_t n, char *p)
 {
     int i;
     for (i=0; i<8; i++) {
@@ -441,6 +491,15 @@ void htoa32(uint32_t n, char *p)
     }
     *p = '\0';
 }
+#endif
+
+#if NOTE_SHOW_MALLOC
+//**************************************************************************/
+/*!
+  @brief  If set for low-memory platforms, show a malloc call.
+  @param   len the number of bytes of memory allocated by the last call.
+*/
+/**************************************************************************/
 void *malloc_show(size_t len)
 {
     char str[16];
@@ -451,7 +510,7 @@ void *malloc_show(size_t len)
     if (p == NULL) {
         hookDebugOutput("FAIL");
     } else {
-        htoa32((uint32_t)p, str);
+        n_htoa32((uint32_t)p, str);
         hookDebugOutput(str);
     }
     return p;
@@ -487,7 +546,7 @@ void NoteFree(void *p)
     if (hookFree != NULL) {
 #if NOTE_SHOW_MALLOC
         char str[16];
-        htoa32((uint32_t)p, str);
+        n_htoa32((uint32_t)p, str);
         hookDebugOutput("free");
         hookDebugOutput(str);
 #endif

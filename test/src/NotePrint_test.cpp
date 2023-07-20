@@ -11,7 +11,7 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
@@ -26,7 +26,6 @@ FAKE_VOID_FUNC(NoteDebug, const char *)
 
 namespace
 {
-
 
 TEST_CASE("NotePrint")
 {
@@ -84,4 +83,4 @@ TEST_CASE("NotePrint")
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST

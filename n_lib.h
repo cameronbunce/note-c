@@ -26,7 +26,7 @@ extern "C" {
     @brief  How long to wait for the card for any given transaction.
 */
 /**************************************************************************/
-#define NOTECARD_TRANSACTION_TIMEOUT_SEC     10
+#define NOTECARD_TRANSACTION_TIMEOUT_SEC     30
 
 // The notecard is a real-time device that has a fixed size interrupt buffer.
 // We can push data at it far, far faster than it can process it, therefore we
@@ -96,6 +96,11 @@ const char *NoteI2CReceive(uint16_t DevAddress, uint8_t* pBuffer, uint16_t Size,
 bool NoteHardReset(void);
 const char *NoteJSONTransaction(char *json, char **jsonResponse);
 bool NoteIsDebugOutputActive(void);
+
+// Utilities
+void n_htoa32(uint32_t n, char *p);
+void n_htoa16(uint16_t n, unsigned char *p);
+uint64_t n_atoh(char *p, int maxlen);
 
 // Constants, a global optimization to save static string memory
 extern const char *c_null;

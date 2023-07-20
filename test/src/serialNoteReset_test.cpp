@@ -11,7 +11,7 @@
  *
  */
 
-#ifdef TEST
+#ifdef NOTE_C_TEST
 
 #include <catch2/catch_test_macros.hpp>
 #include "fff.h"
@@ -113,8 +113,23 @@ TEST_CASE("serialNoteReset")
 
         CHECK(NoteSerialReceive_fake.call_count > 0);
     }
+
+    SECTION("NoteGetMs overflow") {
+        NoteSerialReset_fake.return_val = true;
+        NoteSerialReceive_fake.return_val = ' ' - 1;
+        bool serialAvailRetVals[] = {true, false};
+        SET_RETURN_SEQ(NoteSerialAvailable, serialAvailRetVals, 2);
+        long unsigned int getMsReturnVals[] = {
+            UINT32_MAX - 500,
+            UINT32_MAX - 400,
+            0
+        };
+        SET_RETURN_SEQ(NoteGetMs, getMsReturnVals, 3);
+
+        CHECK(serialNoteReset());
+    }
 }
 
 }
 
-#endif // TEST
+#endif // NOTE_C_TEST
